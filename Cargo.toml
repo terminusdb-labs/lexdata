@@ -1,0 +1,12 @@
+[package]
+name = "lexdata"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gavin Mendel-Gleason"]
+licence = "Apache-2.0"
+exclude = [".gitignore", ".github/"]
+
+[dependencies]
+gmp-mpfr-sys = "1.4.8"
+bytes = "1.0"
+byteorder = "1.4.3"
