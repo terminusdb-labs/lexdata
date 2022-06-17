@@ -8,9 +8,9 @@ representations of various data types.
 The roadmap of data types which Lexdata intends to support and which
 are already implemented are:
 
-[x] Large integers (GMP)
-[ ] Large Floats
-[ ] Dates
+- [x] Large integers (GMP)
+- [ ] Large Floats
+- [ ] Dates
 
 ## Discussion
 
