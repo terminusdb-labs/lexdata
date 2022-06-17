@@ -31,6 +31,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "gmp-mpfr-sys",
+ "libc",
 ]
 
 [[package]]
