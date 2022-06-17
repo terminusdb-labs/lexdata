@@ -33,8 +33,6 @@ const FIRST_MASK : u8 = !(FIRST_SIGN | FIRST_CONTINUATION);
 const FIRST_MAX : u8 = FIRST_CONTINUATION;
 
 fn size_enc(size : usize) -> Vec<u8> {
-    println!("size_enc");
-    println!("-------------------------------");
     let mut remainder = size;
     let mut v = vec![];
     let mut last = true;
