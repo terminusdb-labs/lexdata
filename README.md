@@ -11,6 +11,7 @@ are already implemented are:
 - [x] Large integers (GMP)
 - [ ] Large Floats
 - [ ] Dates
+- [ ] Rationals
 
 ## Discussion
 
