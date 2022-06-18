@@ -31,6 +31,7 @@ def canonical_even(seq):
     if (l % 2) == 0 or seq == [0]:
         return seq
     else:
+        # WRONG!
         return seq
 
 def nd_lexical(n,d):
@@ -225,4 +226,10 @@ for seq in stern_brocot_seqs:
 print(f"convs: {convs}")
 
 ## Floats
+
+x = 2343.234323
+mag = 4
+size
+
+
 

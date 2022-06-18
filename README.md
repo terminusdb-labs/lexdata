@@ -109,11 +109,21 @@ pos|  size5  ______________limbs______________________
  |10000101|10001100|11000001|00001100|10000101|00101100|
 ```
 
+## Large Floats
+
+
+
+### Dates
+
+TBD
+
 ## Rationals
 
 Every rational number has a finite, unique, lexically sortable
 representation preserving the order relation on rationals *based* on
-(but not identical to) a continued fraction expansion.
+(but not identical to) a continued fraction expansion. (See [Kornerup,
+Matula](https://www.semanticscholar.org/paper/LCF%3A-A-Lexicographic-Binary-Representation-of-the-Kornerup-Matula/cea51e9517a6b339697cc8b626d8c639cb689f99)
+for details).
 
 The continued fraction expansion has integer coefficients given by the
 Euclidean algorithm and this representation has very remarkable
@@ -228,9 +238,9 @@ For instance, to represent `3/5`, we can write it as:
 ```
 3/5 = [+,0,-1,1,-2]
 
-                -1        1        -2
- sign     cont  |   cont  |   cont  |
- |cont 0   |    |    |    |    |    |      zero termination
+       0        -1        1        -2
+ sign  |  cont  |   cont  |   cont  |
+ |cont |   |    |    |    |    |    |      zero termination
  || ___|_  | ___|__  | ___|__  | ___|__   ____|__
  ||/     \ |/      \ |/      \ |/      \ /       \
 |1000 0000|1111 1110|0000 0001|1111 1101|0000 0000|
@@ -239,11 +249,3 @@ For instance, to represent `3/5`, we can write it as:
 Recall, that for negative polarity terms, the continuation bit is also
 inverted, such that `0` denotes further bytes, and `1` no further
 bytes (preserving the appropriate inverted ordering).
-
-## Floats
-
-
-
-### Dates
-
-TBD
