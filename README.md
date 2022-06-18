@@ -1,7 +1,11 @@
 # Lexdata
 
 This rust library is designed to produce compact lexical
-representations of various data types.
+representations of various data types. Lexical representations are
+useful because they enable prefix-based indexing strategies which can
+support range queries. For instance, they can be used directly in
+radix trees or in front-coded dictionaries to obtain all elements
+below, above or between some bounds without a scan.
 
 ## Roadmap
 
