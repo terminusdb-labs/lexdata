@@ -163,7 +163,7 @@ We will choose the later representation.
 Each prefix of the continued fraction (called a pre-convergent) forms
 a unique *parent* relationship with subsequent elements bounding the
 values which come after the pre-convergent. However, this bounding
-behvaiour alternates in direction Bounding from below, then above,
+behvaiour alternates in direction bounding from below, then above,
 then below.. .etc.
 
 We will look at the expansion of 3/5 to see how this alternates:
