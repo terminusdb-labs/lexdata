@@ -14,8 +14,7 @@ are already implemented are:
 
 - [x] Large integers (GMP)
 - [ ] Large Floats
-- [ ] Dates
-- [ ] Rationals
+- [ ] Large Rationals
 
 ## Discussion
 
@@ -104,20 +103,70 @@ And it's representation in Lexdata:
 
   terminal size byte
    |
-pos|  size5  ______________limbs______________________
+pos|  size 5 ______________limbs______________________
   ||   /|\  /                                         \
  |10000101|10001100|11000001|00001100|10000101|00101100|
 ```
 
 ## Large Floats
 
+For large floating point numbers we must store an *exponent*, which is
+somewhat similar to the size for a large integer, together with a
+*mantissa*.
 
+The normal form places the decimal point at the first digit. This
+makes it possible to use the exponent to compare lexically and then to
+directly compare the mantissa lexically as well.
 
-### Dates
+The exponent needs to encode *two* signs. One for the sign of the
+number, and one for the sign of the order.
 
-TBD
+For the mantissa we should *not* encode a size since the length does
+not indicate magnitude. This means we need to use a representation
+with a continuation bit.
 
-## Rationals
+However, the continuation bit must be at the *end* of the word, since
+having further digits does not mean it is larger, except for words
+which have no further digits.
+
+We can use the same twos complement trick with the entire
+representation to obtain the negative numbers.
+
+```
+float representation:
+
+| size | mantissa |
+
+size:
+
+  s: sign
+  m: exponent sign
+  e: exponent
+
+|smceeeee|ceeeeeee|...|ceeeeeee|
+
+mantissa:
+  c: continuation
+  n: number
+
+|nnnnnnnc|nnnnnnnc|...|nnnnnnnc|
+
+The representation of 12.3:
+The normal form is 1.23 * 10^1
+
+Has a significand of 123 which is 01111011
+The exponent is 1
+
+  pos exponent
+   |  continuation
+   | /         mantissa
+pos|| size 1 ___| cont
+  |||    |  /    \|
+ |11000001|11110110|
+
+```
+
+## Large Rationals
 
 Every rational number has a finite, unique, lexically sortable
 representation preserving the order relation on rationals *based* on
