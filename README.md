@@ -146,7 +146,7 @@ However, this expansion has two equivalent representations. One ending
 in a `1`, and one ending with `a_(n-1) - 1`. To obtain a unique
 representation we will need to normalise the sequence.
 
-Typeically this is done by chosing one of either ending with a `1`, or
+Typically this is done by chosing one of either ending with a `1`, or
 a number larger than `1`. However to make it lexically sortable we
 will instead choose to make an *even length sequence*, by either
 expansion or contraction of the sequence to its even numbered lenghth.
