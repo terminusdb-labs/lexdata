@@ -149,7 +149,7 @@ representation we will need to normalise the sequence.
 Typically this is done by chosing one of either ending with a `1`, or
 a number larger than `1`. However to make it lexically sortable we
 will instead choose to make an *even length sequence*, by either
-expansion or contraction of the sequence to its even numbered lenghth.
+expansion or contraction of the sequence to its even numbered length.
 
 For instance the continued fraction expansion of `1/3` is given as:
 
