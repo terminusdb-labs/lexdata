@@ -230,10 +230,10 @@ For instance, to represent `3/5`, we can write it as:
 
                 -1        1        -2
  sign     cont  |   cont  |   cont  |
- |cont 0   |    |    |    |    |    |
- || ___|_  | ___|__  | ___|__  | ___|__
- ||/     \ |/      \ |/      \ |/      \
-|1000 0000|1111 1110|0000 0001|1111 1101|
+ |cont 0   |    |    |    |    |    |      zero termination
+ || ___|_  | ___|__  | ___|__  | ___|__   ____|__
+ ||/     \ |/      \ |/      \ |/      \ /       \
+|1000 0000|1111 1110|0000 0001|1111 1101|0000 0000|
 ```
 
 Recall, that for negative polarity terms, the continuation bit is also
