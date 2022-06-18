@@ -126,8 +126,9 @@ Matula](https://www.semanticscholar.org/paper/LCF%3A-A-Lexicographic-Binary-Repr
 for details).
 
 The continued fraction expansion has integer coefficients given by the
-Euclidean algorithm and this representation has very remarkable
-properties.
+[Euclidean
+algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm) and this
+representation has very remarkable properties.
 
 The continued fraction expansion is given as:
 
