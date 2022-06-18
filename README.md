@@ -104,3 +104,98 @@ pos|  size5  ______________limbs______________________
   ||   /|\  /                                         \
  |10000101|10001100|11000001|00001100|10000101|00101100|
 ```
+
+## Rationals
+
+Every rational number has a finite, unique, lexically sortable
+represenation preserving the order relation on rationals *based* on a
+continued fraction expansion.
+
+The continued fraction expansion has integer coefficients given by the
+Euclidean algorithm and this representation has very remarkable
+properties.
+
+The continued fraction expansion is given as:
+
+```
+p/q = a_0 + 1 / (a_1 + (1 / a_n + ...))
+```
+
+We can write this short hand as:
+
+```
+p/q = [ a_0 / a_1 / ... a_n ]
+
+```
+
+However, this expansion has two equivalent representations. One ending
+in a `1`, and one ending with `a_(n-1) - 1`. To obtain a unique
+representation we need to normalise the sequence.
+
+Typeically this is done by chosing one of either ending with a `1`, or
+a number larger than `1`. However to make it lexically sortable we
+will instead choose to make an *even length sequence*, by either
+expansion or contraction of the sequence to its even numbered lenghth.
+
+For instance the continued fraction expansion of `1/3` is given as:
+
+```
+1/3 = [0 / 2 / 1] = 0 + 1 / (2 + (1 / 1))
+1/3 = [0 / 3] = 0 + 1 / 3
+```
+
+We will choose the later representation.
+
+Each prefix of the continued fraction (called a pre-convergent) forms
+a unique *parent* relationship with subsequent elements bounding the
+values which come after the pre-convergent. However, this bounding
+behvaiour alternates.
+
+We will look at the expansion of 2/5 to see how this alternates:
+
+`3/5 = [0/1/1/2]`:
+
+| sequence    | float   | rational | bounded from |
+|-------------|---------|----------|--------------|
+| `[0]`       |  `0`    |  `0`     | below        |
+| `[0/1]`     |  `1`    |  `1/1`   | above        |
+| `[0/1/1]`   |  `0.5`  |  `1/2`   | below        |
+| `[0/1/1/2]` |  `0.6`  |  `3/5`   | exact        |
+
+This suggests that the lexical ordering must take into account the
+alternation of ordering present in the sequence of bounds.
+
+Thankfully we can do this conceptually by altering the sign of the
+elements in the sequence, to get a directly sortable
+representation. For instance, the above even numbered sequence can be
+written as:
+
+```
+seq(3/5) = [0,-1,1,-2]
+```
+
+Using the property that all sequences have a unique parent which
+bounds it from the appropriate direction, our representation is
+conceptually finished for *positive* rationals.
+
+To get the *negative* rationals, we need to add a sign bit, with `1`
+for positive, and `0` for negative, at the beginning of our sequence,
+and then flip the signs on the remaining.
+
+```
+lexical_seq(3/5)  = [1, 0,-1, 1,-2]
+lexical_seq(-3/5) = [0,-0, 1,-1, 2]
+```
+
+To represent these as bit sequences we can re-use our represenation of
+bignums for each element of the sequence, as no coefficient may be
+zero. This allows us to zero terminate the sequence with a final zero
+in our large integer representation.
+
+## Floats
+
+TBD
+
+### Dates
+
+TBD
