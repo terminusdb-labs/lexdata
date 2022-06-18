@@ -182,14 +182,14 @@ Using the property that all sequences have a unique parent which
 bounds it from the appropriate direction, our representation is
 conceptually finished for *positive* rationals.
 
-To get the *negative* rationals, we need to add a sign bit, with `1`
-for positive, and `0` for negative, at the beginning of our sequence,
+To get the *negative* rationals, we need to add a sign flag, with `+`
+for positive, and `-` for negative, at the beginning of our sequence,
 and then flip the signs on the remaining sequence for negatives,
 ensuring that larger negatives are sorted "backwards".
 
 ```
-lexical_seq(3/5)  = [1, 0,-1, 1,-2]
-lexical_seq(-3/5) = [0,-0, 1,-1, 2]
+lexical_seq(3/5)  = [+, 0,-1, 1,-2]
+lexical_seq(-3/5) = [-,-0, 1,-1, 2]
 ```
 
 To represent these as bit sequences we can use tricks similar to our
@@ -212,11 +212,11 @@ continuation bit and the continuation bit is set to zero to terminate.
 ```
 128:
 
-      1      000 0000 =  128
-      |             |
-cont  | termination |
- | ___|__  | _______|
- |/      \ |/       |
+      1    000 0000 =  128
+      |           |
+cont  |termination|
+ | ___|__  | _____|
+ |/      \ |/      \
 |1000 0001|0000 0000|
 ```
 
@@ -242,7 +242,7 @@ bytes (preserving the appropriate inverted ordering).
 
 ## Floats
 
-TBD
+
 
 ### Dates
 

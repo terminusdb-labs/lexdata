@@ -31,7 +31,6 @@ def canonical_even(seq):
     if (l % 2) == 0 or seq == [0]:
         return seq
     else:
-        
         return seq
 
 def nd_lexical(n,d):
@@ -225,4 +224,5 @@ for seq in stern_brocot_seqs:
     convs.append(n/d)
 print(f"convs: {convs}")
 
+## Floats
 
