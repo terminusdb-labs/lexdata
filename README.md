@@ -112,8 +112,8 @@ pos|  size5  ______________limbs______________________
 ## Rationals
 
 Every rational number has a finite, unique, lexically sortable
-represenation preserving the order relation on rationals *based* on a
-continued fraction expansion.
+representation preserving the order relation on rationals *based* on
+(but not identical to) a continued fraction expansion.
 
 The continued fraction expansion has integer coefficients given by the
 Euclidean algorithm and this representation has very remarkable
@@ -134,7 +134,7 @@ p/q = [ a_0 / a_1 / ... a_n ]
 
 However, this expansion has two equivalent representations. One ending
 in a `1`, and one ending with `a_(n-1) - 1`. To obtain a unique
-representation we need to normalise the sequence.
+representation we will need to normalise the sequence.
 
 Typeically this is done by chosing one of either ending with a `1`, or
 a number larger than `1`. However to make it lexically sortable we
@@ -153,9 +153,10 @@ We will choose the later representation.
 Each prefix of the continued fraction (called a pre-convergent) forms
 a unique *parent* relationship with subsequent elements bounding the
 values which come after the pre-convergent. However, this bounding
-behvaiour alternates.
+behvaiour alternates in direction Bounding from below, then above,
+then below.. .etc.
 
-We will look at the expansion of 2/5 to see how this alternates:
+We will look at the expansion of 3/5 to see how this alternates:
 
 `3/5 = [0/1/1/2]`:
 
@@ -167,12 +168,11 @@ We will look at the expansion of 2/5 to see how this alternates:
 | `[0/1/1/2]` |  `0.6`  |  `3/5`   | exact        |
 
 This suggests that the lexical ordering must take into account the
-alternation of ordering present in the sequence of bounds.
+alternation present in the sequence of bounds.
 
-Thankfully we can do this conceptually by altering the sign of the
-elements in the sequence, to get a directly sortable
-representation. For instance, the above even numbered sequence can be
-written as:
+We can do this conceptually by altering the sign of the elements in
+the sequence, to get a directly sortable representation. For instance,
+the above even numbered sequence can be written as:
 
 ```
 seq(3/5) = [0,-1,1,-2]
@@ -184,17 +184,61 @@ conceptually finished for *positive* rationals.
 
 To get the *negative* rationals, we need to add a sign bit, with `1`
 for positive, and `0` for negative, at the beginning of our sequence,
-and then flip the signs on the remaining.
+and then flip the signs on the remaining sequence for negatives,
+ensuring that larger negatives are sorted "backwards".
 
 ```
 lexical_seq(3/5)  = [1, 0,-1, 1,-2]
 lexical_seq(-3/5) = [0,-0, 1,-1, 2]
 ```
 
-To represent these as bit sequences we can re-use our represenation of
-bignums for each element of the sequence, as no coefficient may be
-zero. This allows us to zero terminate the sequence with a final zero
-in our large integer representation.
+To represent these as bit sequences we can use tricks similar to our
+represenation of sizes for each element of the sequence. Here only the
+first bit need give a sign, since each subsequent sign is known from
+context. Hence the first segment is identical to our size
+representation for bignums, but subsequent byte representations can be
+as follows:
+
+```
+c = continuation
+o = number bits
+
+|cooo oooo|
+```
+
+Such that a number is represented by sequences of bytes ignoring the
+continuation bit and the continuation bit is set to zero to terminate.
+
+```
+128:
+
+      1      000 0000 =  128
+      |             |
+cont  | termination |
+ | ___|__  | _______|
+ |/      \ |/       |
+|1000 0001|0000 0000|
+```
+
+As no coefficient may be zero, we can zero terminate the sequence with
+a final zero in our above representation.
+
+For instance, to represent `3/5`, we can write it as:
+
+```
+3/5 = [+,0,-1,1,-2]
+
+                -1        1        -2
+ sign     cont  |   cont  |   cont  |
+ |cont 0   |    |    |    |    |    |
+ || ___|_  | ___|__  | ___|__  | ___|__
+ ||/     \ |/      \ |/      \ |/      \
+|1000 0000|1111 1110|0000 0001|1111 1101|
+```
+
+Recall, that for negative polarity terms, the continuation bit is also
+inverted, such that `0` denotes further bytes, and `1` no further
+bytes (preserving the appropriate inverted ordering).
 
 ## Floats
 
