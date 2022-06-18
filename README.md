@@ -132,7 +132,7 @@ properties.
 The continued fraction expansion is given as:
 
 ```
-p/q = a_0 + 1 / (a_1 + (1 / a_n + ...))
+p/q = a_0 + 1 / (a_1 + (1 / ... (1 / a_n)))
 ```
 
 We can write this short hand as:
