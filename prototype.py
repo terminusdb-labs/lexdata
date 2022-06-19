@@ -92,13 +92,6 @@ def lexical_nd(seq):
         n = -n
     return (n,d)
 
-def normalize(seq):
-    if len(seq) > 2:
-        last = seq[-1]
-        if last == 1:
-            seq = seq[:-2] + [seq[-2]+1]
-    return seq
-
 def convergent(seq):
     a_z = seq[0]
     newseq = seq[1:].copy()
