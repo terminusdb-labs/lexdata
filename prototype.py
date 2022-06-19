@@ -28,16 +28,30 @@ def continued(n,d):
 
 def canonical_even(seq):
     l = len(seq)
-    if (l % 2) == 0 or seq == [0]:
+    if (l % 2) == 0 or l == 1:
         return seq
     else:
-        # WRONG!
-        return seq
+        if seq[-1] == 1:
+            return seq[:-2] + [seq[-2] + 1]
+        else:
+            return seq[:-1] + [seq[-1] - 1, 1]
+
+def sign(n,d):
+    if Fraction(n,d) >= 0:
+        return 1
+    else:
+        return 0
 
 def nd_lexical(n,d):
+    s = sign(n,d)
+    if s == 0:
+        n = -n
     seq = continued(n,d)
     seq = canonical_even(seq)
-    return alternate(seq)
+    if s == 1:
+        return [s] + alternate(seq)
+    else:
+        return alternate([s] + seq)
 
 def alternate(seq):
     pos = True
@@ -51,13 +65,12 @@ def alternate(seq):
             new.append(-n)
     return new
 
-def lexical_nd(seq):
-    newseq = alternate(seq)
+def discontinued(seq):
+    newseq =seq.copy()
     a_z = newseq.pop(0)
     newseq.reverse()
     number = 0
     for a_n in newseq:
-        print(f"a_n: {a_n}")
         if number == 0:
             number = Fraction(1,a_n)
         else:
@@ -65,6 +78,18 @@ def lexical_nd(seq):
     f = a_z + number
     n = f.numerator
     d = f.denominator
+    return (n,d)
+
+def lexical_nd(seq):
+    sign = seq[0]
+    if sign == 1:
+        newseq = alternate(seq[1:])
+    else:
+        newseq = alternate(seq)[1:]
+    print(f"{newseq}")
+    (n,d) = discontinued(newseq)
+    if sign == 0:
+        n = -n
     return (n,d)
 
 def normalize(seq):
@@ -80,7 +105,7 @@ def convergent(seq):
     newseq.reverse()
     number = 0
     for a_n in newseq:
-        print(f"a_n: {a_n}")
+        #print(f"a_n: {a_n}")
         if number == 0:
             number = 1/a_n
         else:
@@ -160,31 +185,6 @@ def stern_brocot_to_nd(brocot_seq):
         p = -p
     return (p,q)
 
-## Test vals
-vals = [(1,3),(3,5),(23,12),(22,7),(5,2),(10,1),(8,7),(3432,233)]
-
-## Continued fractions
-for (n,d) in vals:
-    (p,q) = lexical_nd(nd_lexical(n,d))
-    assert (p == n and d == q)
-
-continued_vals = []
-for (n,d) in vals:
-    print(f"n/d: {n}/{d}")
-    seq = nd_lexical(n,d)
-    print(f"seq: {seq}")
-    continued_vals.append(seq)
-
-print(continued_vals)
-continued_vals.sort()
-sorted_vals = []
-for seq in continued_vals:
-    (n,d) = lexical_nd(seq)
-    sorted_vals.append(Fraction(n,d))
-
-assert(sorted(sorted_vals) == sorted_vals)
-print(f"lexicalically sorted: {sorted_vals}")
-
 def date_to_continued(date):
     f = Fraction.from_float(date)
     p = f.numerator
@@ -195,41 +195,69 @@ def date_to_continued(date):
 def continued_to_date(continued_seq):
     return convergent(continued_seq)
 
-# import time
-now = time.time()
-print(f"date-time: {now}")
-sb_now = date_to_continued(now)
-print(f"continued date-time: {sb_now}")
-now_again = continued_to_date(sb_now)
-print(f"date-time again: {now_again}")
 
+if __name__ == "__main__":
+    ## Test vals
+    vals = [(1,3),(3,5),(23,12),(22,7),(5,2),(10,1),(8,7),(3432,233),(-1,3),(-430,1)]
 
-# Stern Brocot examples
-for (n,d) in vals:
-    (p,q) = stern_brocot_to_nd(nd_to_stern_brocot(n,d))
-    assert (p == n and d == q)
+    ## Continued fractions
+    for (n,d) in vals:
+        (p,q) = lexical_nd(nd_lexical(n,d))
+        assert (p == n and d == q)
 
-stern_brocot_seqs = []
-stern_vals = vals.copy()
-for (n,d) in stern_vals:
-    print(f"n/d: {n}/{d}")
-    c = nd_to_stern_brocot(n,d)
-    print(f"seq: {c}")
-    stern_brocot_seqs.append(c)
+    continued_vals = []
+    for (n,d) in vals:
+        print(f"n/d: {n}/{d}")
+        seq = nd_lexical(n,d)
+        print(f"seq: {seq}")
+        continued_vals.append(seq)
 
-stern_brocot_seqs.sort()
+    print(continued_vals)
+    continued_vals.sort()
+    sorted_vals = []
+    for seq in continued_vals:
+        (n,d) = lexical_nd(seq)
+        sorted_vals.append(Fraction(n,d))
 
-convs = []
-for seq in stern_brocot_seqs:
-    (n,d) = stern_brocot_to_nd(seq)
-    convs.append(n/d)
-print(f"convs: {convs}")
+    assert(sorted(sorted_vals) == sorted_vals)
+    print(f"lexicalically sorted: {sorted_vals}")
+
+    floats = [f.numerator / f.denominator for f in sorted_vals]
+    print(f"lexicalically sorted as float: {floats}")
+    # import time
+    now = time.time()
+    print(f"date-time: {now}")
+    sb_now = date_to_continued(now)
+    print(f"continued date-time: {sb_now}")
+    now_again = continued_to_date(sb_now)
+    print(f"date-time again: {now_again}")
+
+    ## Test vals
+    vals = [(1,3),(3,5),(23,12),(22,7),(5,2),(10,1),(8,7),(3432,233)]
+
+    # Stern Brocot examples
+    for (n,d) in vals:
+        (p,q) = stern_brocot_to_nd(nd_to_stern_brocot(n,d))
+        assert (p == n and d == q)
+
+    stern_brocot_seqs = []
+    stern_vals = vals.copy()
+    for (n,d) in stern_vals:
+        print(f"n/d: {n}/{d}")
+        c = nd_to_stern_brocot(n,d)
+        print(f"seq: {c}")
+        stern_brocot_seqs.append(c)
+
+    stern_brocot_seqs.sort()
+
+    convs = []
+    for seq in stern_brocot_seqs:
+        (n,d) = stern_brocot_to_nd(seq)
+        convs.append(n/d)
+        print(f"convs: {convs}")
 
 ## Floats
 
-x = 2343.234323
-mag = 4
-size
 
 
 
