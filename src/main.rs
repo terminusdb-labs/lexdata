@@ -4,6 +4,10 @@ use byteorder::{
     WriteBytesExt
 };
 
+// give a compile error when not on a 64 bit architecture
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("not on a 64 bit architecture");
+
 /// size_encode takes a vector representing the
 /// order of a number and converts it into a vector of bytes
 ///
@@ -101,7 +105,6 @@ fn negate(v : &mut [u8]) -> () {
     }
 }
 
-// We need to panic if this is wrong
 const BYTES_PER_WORD : usize = 8;
 
 fn convert_mpz_lex(z : *mut gmp_mpfr_sys::gmp::mpz_t) -> Vec<u8> {
