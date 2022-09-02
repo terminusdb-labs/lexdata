@@ -1,9 +1,3 @@
-use rug;
-use byteorder::{
-    BigEndian,
-    WriteBytesExt
-};
-
 //! Lexdata
 //!
 //! This library is designed to produce compact lexical
@@ -13,9 +7,15 @@ use byteorder::{
 //! in radix trees or in front-coded dictionaries to obtain all
 //! elements below, above or between some bounds without a scan.
 
+use rug;
+use byteorder::{
+    BigEndian,
+    WriteBytesExt
+};
+
 // mpz_to_lexical
 // lexical_to_mpz
-fn mpz_to_lexical(z : *mut gmp::mpz_t) -> Vec<u8> {
+fn integer_to_lexical(z : Integer) -> Vec<u8> {
     //
     panic!("This is not yet implemented")
 }
