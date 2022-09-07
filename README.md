@@ -13,7 +13,7 @@ The roadmap of data types which Lexdata intends to support and which
 are already implemented are:
 
 - [x] Large integers (GMP)
-- [ ] Large Floats
+- [ ] Floats
 - [ ] Large Rationals
 
 ## Discussion
@@ -22,6 +22,12 @@ More discussion on the strategies used, and how they are implemented
 can be found in our discussion in TerminusDB on [Lexical
 representation of data
 types](https://github.com/terminusdb/terminusdb-store/blob/main/docs/LEXICAL.md).
+
+Each of the datatypes presented are not independent, and therefore
+there is not global sorting order over them. They are intended to be
+prefixed with a type annotation that allows them to be
+disambiguated. In addition they do not have zero bytes such that they
+can be treated as a string representation.
 
 ## Large Integers
 
@@ -69,16 +75,16 @@ size = 4095
 
 ```
 
-The number part is reprsented using 8-bit words as *limbs* analogous
-to the mechanism of GMP. The use of bytes increases the compactness
-for small numbers, which is an advantage.
+The number part is reprsented using 7-bit words as *limbs* analogous
+to the mechanism of GMP, but with a bit flipped to ensure there are no
+zero bytes.
 
 ```
 The number part of 12:
 
 |00001100|
 
-The full represenation of 12, inclusing size of 1:
+The full represenation of 12, including size of 1:
 
 |10000001|00001100|
 
@@ -108,7 +114,54 @@ pos|  size 5 ______________limbs______________________
  |10000101|10001100|11000001|00001100|10000101|00101100|
 ```
 
-## Large Floats
+This is however, not a concern with rug Integer class, which allows us
+to directly ask about number of significant bits and to shift.
+
+## Floats (32 and 64 bit)
+
+IEEE floating points are somewhat complex to lexically order, because
+we need to represent various classes. These classes (taken from the
+Ordering in rust) are:
+
+```
+    negative quiet NaN
+    negative signaling NaN
+    negative infinity
+    negative numbers
+    negative subnormal numbers
+    negative zero
+    positive zero
+    positive subnormal numbers
+    positive numbers
+    positive infinity
+    positive signaling NaN
+    positive quiet NaN.
+```
+
+Since there are eleven classes, we need to represent the order with an
+ordering prefix of 4 bits.
+
+```
+float representation:
+
+| size | mantissa |
+
+size:
+
+size:
+
+  c: class
+  m: exponent sign
+  e: exponent
+
+|ccccmeee|ceeeeeee|...|ceeeeeee|
+```
+
+For the representation of the subnormals, we need to represent leading
+zeros, as normalisation is not possible. This means we must know what
+our representation size is (i.e. f32 or f64).
+
+## Large Floats (still exploring)
 
 For large floating point numbers we must store an *exponent*, which is
 somewhat similar to the size for a large integer, together with a

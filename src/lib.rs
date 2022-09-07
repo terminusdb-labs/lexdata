@@ -29,35 +29,37 @@ use std::cmp::Ordering;
 /// entire result and therby end up with a negative, so it
 /// is always 1 here.
 
-const TERMINAL : u8 = 0;
-const FIRST_SIGN : u8 = 0b10000000u8;
-const FIRST_TERMINAL : u8 = 0b00000000u8;
-const CONTINUATION : u8 = 0b10000000u8;
-const FIRST_CONTINUATION : u8 = 0b01000000u8;
-const BASE_MASK : u8 = !CONTINUATION;
-const FIRST_MASK : u8 = !(FIRST_SIGN | FIRST_CONTINUATION);
-const FIRST_MAX : u8 = FIRST_CONTINUATION;
+struct ByteLayout {
+    terminal : u8,
+    first_sign : u8,
+    first_terminal : u8,
+    continuation : u8,
+    first_continuation : u8,
+    base_mask : u8,
+    first_mask : u8,
+    first_max : u8,
+}
 
-fn size_enc(size : usize) -> Vec<u8> {
+fn size_enc(size : usize, bl : ByteLayout) -> Vec<u8> {
     let mut remainder = size;
     let mut v = vec![];
     let mut last = true;
     while remainder > 0 {
-        if remainder >= CONTINUATION as usize {
-            let continued = if last {TERMINAL} else {CONTINUATION};
-            let byte = continued | ((remainder & BASE_MASK as usize) as u8);
+        if remainder >= bl.continuation as usize {
+            let continued = if last {bl.terminal} else {bl.continuation};
+            let byte = continued | ((remainder & bl.base_mask as usize) as u8);
             v.push(byte);
-        }else if remainder >= FIRST_MAX as usize {
+        }else if remainder >= bl.first_max as usize {
             // special case where we fit in 7 bits but not 6
             // and we need a zero padded initial byte.
-            let continued = if last {TERMINAL} else {CONTINUATION};
-            let byte = continued | ((remainder & BASE_MASK as usize) as u8);
+            let continued = if last {bl.terminal} else {bl.continuation};
+            let byte = continued | ((remainder & bl.base_mask as usize) as u8);
             v.push(byte);
-            let byte = FIRST_SIGN | FIRST_CONTINUATION;
+            let byte = bl.first_sign | bl.first_continuation;
             v.push(byte)
         }else{
-            let continued = if last {FIRST_TERMINAL} else {FIRST_CONTINUATION};
-            let byte = FIRST_SIGN | continued | ((remainder & FIRST_MASK as usize) as u8);
+            let continued = if last {bl.first_terminal} else {bl.first_continuation};
+            let byte = bl.first_sign | continued | ((remainder & bl.first_mask as usize) as u8);
             v.push(byte)
         }
         remainder = remainder >> 7;
@@ -67,24 +69,24 @@ fn size_enc(size : usize) -> Vec<u8> {
     v
 }
 
-fn size_dec(v : &[u8]) -> (bool,usize,usize) {
+fn size_dec(v : &[u8], bl : ByteLayout) -> (bool,usize,usize) {
     let mut size : usize = 0;
     let mut sign = true;
     for i in 0..v.len() {
         let vi = v[i] as u8;
         if i == 0 {
-            sign  = if vi != 0 && vi & FIRST_SIGN == 0 { false } else { true };
+            sign  = if vi != 0 && vi & bl.first_sign == 0 { false } else { true };
             let vi = if sign { vi } else { !vi };
-            let val = (vi & FIRST_MASK) as usize;
-            if vi & FIRST_CONTINUATION == 0 {
+            let val = (vi & bl.first_mask) as usize;
+            if vi & bl.first_continuation == 0 {
                 return (sign,val,i+1)
             }else{
                 size = size + val
             }
         }else{
             let vi = if sign { vi } else { !vi };
-            let val = (vi & BASE_MASK) as usize;
-            if vi & CONTINUATION == 0 {
+            let val = (vi & bl.base_mask) as usize;
+            if vi & bl.continuation == 0 {
                 return (sign,size+val,i+1)
             }else{
                 size = size + val
@@ -101,20 +103,31 @@ fn negate(v : &mut [u8]) -> () {
     }
 }
 
+const INTEGER_LAYOUT : ByteLayout<'static> = ByteLayout{
+    first_sign : 0b10000000u8,
+    first_terminal : 0b00000000u8,
+    first_continuation: 0b01000000u8,
+    terminal : 0b00000000u8,
+    continuation : 0b10000000u8,
+    base_mask: (! 0b10000000u8),
+    first_mask : (! 0b11000000u8),
+    first_max : 0b01000000u8,
+}
+
 pub fn integer_to_lexical(mut z : Integer) -> Vec<u8> {
     let negative = match z.cmp0() { Ordering::Less => true, _ => false };
     let size = z.significant_bits();
     if size == 0 {
-        return vec![FIRST_SIGN]
+        return vec![INTEGER_LAYOUT.first_sign]
     }else{
         let half_bytes = ((size / 7) + 1) as usize;
-        let mut vec = size_enc(half_bytes);
+        let mut vec = size_enc(half_bytes,INTEGER_LAYOUT);
 
         // +1 is for the zero terminator
         let mut words = vec![0; half_bytes+1];
         for i in 0..half_bytes {
             // Shift left and add 1 to get rid of zeros
-            let word = (((z.clone() & BASE_MASK).to_u32().unwrap() as u8) << 1) + 0b1;
+            let word = (((z.clone() & INTEGER_LAYOUT.base_mask).to_u32().unwrap() as u8) << 1) + 0b1;
             z = z >> 7;
             words[half_bytes - i - 1] = word
         }
@@ -146,6 +159,41 @@ pub fn lexical_to_integer(v : &[u8]) -> Integer {
     return z
 }
 
+const NEGATIVE_QUIET_NAN : u8 = 0b0001;
+const NEGATIVE_SIGNALING_NAN : u8 = 0b0010;
+const NEGATIVE_INFINITY : u8 = 0b0011;
+const NEGATIVE_NUMBERS : u8 = 0b0100;
+const NEGATIVE_SUBNORMAL_NUMBERS : u8 = 0b0101;
+const NEGATIVE_ZERO : u8 = 0b0110;
+const POSITIVE_ZERO : u8 = 0b0111;
+const POSITIVE_SUBNORMAL_NUMBERS : u8 = 0b1000;
+const POSITIVE_NUMBERS : u8 = 0b1001;
+const POSITIVE_INFINITY : u8 = 0b1010;
+const POSITIVE_SIGNALING_NAN : u8 = 0b1011;
+const POSITIVE_QUIET_NAN : u8 = 0b1100;
+
+const FLOAT_LAYOUT : ByteLayout<'static> = ByteLayout{
+    first_sign : 0b10000000u8,
+    first_terminal : 0b00000000u8,
+    first_continuation: 0b01000000u8,
+    terminal : 0b00000000u8,
+    continuation : 0b10000000u8,
+    base_mask: (! 0b10000000u8),
+    first_mask : (! 0b11000000u8),
+    first_max : 0b01000000u8,
+}
+
+pub fn f64_to_lexical(f : f64) -> Vec<u8> {
+    let negative = match f.cmp0() { Ordering::Less => true, _ => false };
+    let size_in_bits = z.significant_bits();
+    let 
+    match c {
+        
+    }
+}
+
+pub fn lexical_to_f64(f : f32) -> Vec<u8> {
+}
 // mpq_to_lexical
 // lexical_to_mpq
 
