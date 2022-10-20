@@ -6,11 +6,11 @@ XSD, may find the library useful as several core data types are
 implemented, namely:
 
 - [x] Strings
-- [ ] Large Integers
-- [ ] i32
-- [ ] i64
-- [ ] f32
-- [ ] f64
+- [x] Large Integers
+- [x] i32
+- [x] i64
+- [x] f32
+- [x] f64
 - [ ] Dates
 - [ ] Date Time
 - [ ] Large Floats
