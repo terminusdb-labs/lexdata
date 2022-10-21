@@ -13,6 +13,7 @@ use rug::Integer;
 //use std::cmp::Ordering;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::io::Cursor;
@@ -27,7 +28,7 @@ pub enum StorageType {
     Float64,
     BigInt,
     BigNum,
-    Date,
+    DateTime,
 }
 
 // Since XSD requires storage of the constraints on the data,
@@ -130,15 +131,13 @@ pub fn aspect_storage(aspect: Aspect) -> StorageType {
         Aspect::Integer | Aspect::PositiveInteger | Aspect::NonNegativeInteger => {
             StorageType::BigInt
         }
+        Aspect::DateTime => StorageType::DateTime,
         _ => panic!("Unimplemented aspect"),
     }
 }
 
 fn aspect_byte(a: Aspect) -> u8 {
-    eprintln!("Aspect {a:?}");
-    let res = a as u8;
-    eprintln!("has value {res:?}");
-    res
+    a as u8
 }
 
 pub fn byte_aspect(b: &u8) -> Aspect {
@@ -152,11 +151,20 @@ pub enum LexDataError {
     BadFloat64Layout(String),
     BadInt32Layout(String),
     BadInt64Layout(String),
+    BadDateFormat(String),
 }
 
 pub fn value_to_storage(v: Value, a: Aspect) -> Result<Vec<u8>, LexDataError> {
     match v {
-        Value::String(s) => string_to_storage(s, a),
+        Value::String(s) => {
+            if a == Aspect::DateTime {
+                date_time_to_storage(s, a)
+            } else if a == Aspect::Decimal {
+                bignum_to_storage(s, a)
+            } else {
+                string_to_storage(s, a)
+            }
+        }
         Value::Int32(i) => int32_to_storage(i, a),
         Value::BigInt(i) => bigint_to_storage(i, a),
         Value::Int64(i) => int64_to_storage(i, a),
@@ -202,12 +210,21 @@ fn string_to_storage(v: String, a: Aspect) -> Result<Vec<u8>, LexDataError> {
     }
 }
 
+fn date_time_to_storage(s: String, a: Aspect) -> Result<Vec<u8>, LexDataError> {
+    match DateTime::parse_from_rfc2822(&s) {
+        Ok(date_time) => {
+            let aspect_u8 = aspect_byte(a);
+            todo!()
+        }
+        Err(parse_error) => Err(LexDataError::BadDateFormat(parse_error.to_string())),
+    }
+}
+
 const BYTE_SIGN_MASK: u8 = 0b1000_0000;
 fn int32_to_storage(i: i32, a: Aspect) -> Result<Vec<u8>, LexDataError> {
     let storage_type = aspect_storage(a);
     if storage_type == StorageType::Int32 {
         let aspect_u8 = aspect_byte(a);
-        eprintln!("Aspect: {aspect_u8:?}");
         let mut wtr = Vec::with_capacity(5);
         wtr.push(aspect_u8);
         wtr.write_i32::<BigEndian>(i).unwrap();
@@ -338,56 +355,36 @@ fn size_decode(v: &[u8]) -> (bool, u32, usize) {
 
 fn bigint_to_storage(bigint: Integer, a: Aspect) -> Result<Vec<u8>, LexDataError> {
     let storage_type = aspect_storage(a);
-    if storage_type == StorageType::BigInt {
-        let is_neg = bigint < 0;
-        let mut int = bigint.abs();
-        eprintln!("Int: {int:?}");
-        let size = int.significant_bits() + 1;
-        eprintln!("Size: {size:?}");
-        let num_bytes = (size / 8) + u32::from(size % 8 != 0);
-        eprintln!("num_bytes: {num_bytes:?}");
-        let size_bytes = size_encode(num_bytes);
-        eprintln!("Size bytes: {size_bytes:?}");
-        let mut number_vec = Vec::with_capacity(size_bytes.len() + num_bytes as usize + 1);
-        for _ in 0..num_bytes {
-            let byte = int.to_u8_wrapping();
-            number_vec.push(byte);
-            eprintln!("byte: {byte:?}");
-            int >>= 8;
-        }
-        number_vec.extend(size_bytes);
-        eprintln!("is_neg: {is_neg:?}");
-        if is_neg {
-            for i in 0..number_vec.len() {
-                eprintln!("number_vec[i] (before): {:?}", number_vec[i]);
-                number_vec[i] = !number_vec[i];
-                eprintln!("number_vec[i] (after): {:?}", number_vec[i]);
-            }
-        }
-        let aspect_u8 = aspect_byte(a);
-        number_vec.push(aspect_u8);
-        number_vec.reverse();
-        eprintln!("Number vec: {number_vec:?}");
-        Ok(number_vec)
-    } else {
-        Err(LexDataError::UnexpectedAspect(format!(
-            "The aspect {a:?} did not match Bignum value type"
-        )))
+    let is_neg = bigint < 0;
+    let mut int = bigint.abs();
+    let size = int.significant_bits() + 1;
+    let num_bytes = (size / 8) + u32::from(size % 8 != 0);
+    let size_bytes = size_encode(num_bytes);
+    let mut number_vec = Vec::with_capacity(size_bytes.len() + num_bytes as usize + 1);
+    for _ in 0..num_bytes {
+        let byte = int.to_u8_wrapping();
+        number_vec.push(byte);
+        int >>= 8;
     }
+    number_vec.extend(size_bytes);
+    if is_neg {
+        for i in 0..number_vec.len() {
+            number_vec[i] = !number_vec[i]
+        }
+    }
+    let aspect_u8 = aspect_byte(a);
+    number_vec.push(aspect_u8);
+    number_vec.reverse();
+    Ok(number_vec)
 }
 
 fn storage_to_bigint(bytes: &[u8]) -> Result<Value, LexDataError> {
     let (is_pos, size, idx) = size_decode(bytes);
-    eprintln!("bytes: {bytes:?}");
-    eprintln!("size: {size:?}");
-    eprintln!("idx: {idx:?}");
-    eprintln!("is_pos: {is_pos:?}");
     let mut int = Integer::new();
     if size == 0 {
         return Ok(Value::BigInt(int));
     }
     for (i, b) in bytes[idx..(size + 1) as usize].iter().enumerate() {
-        eprintln!("b: {b:?}");
         int += if is_pos { *b } else { !*b };
         if i < size as usize - 1 {
             int <<= 8;
@@ -396,8 +393,115 @@ fn storage_to_bigint(bytes: &[u8]) -> Result<Value, LexDataError> {
     if !is_pos {
         int = -int;
     }
-    eprintln!("int: {int:?}");
     Ok(Value::BigInt(int))
+}
+
+fn encode_fraction(fraction: Option<&str>) -> Vec<u8> {
+    if let Some(f) = fraction {
+        if f.is_empty() {
+            return vec![0xfe]; // a "false zero" so we don't represent it at all.
+        }
+        let len = f.len();
+        let size = len / 2 + usize::from(len % 2 != 0);
+        let mut bcd = Vec::with_capacity(size);
+        for i in 0..size {
+            let last = if i * 2 + 2 > len {
+                i * 2 + 1
+            } else {
+                i * 2 + 2
+            };
+            let two = &f[2 * i..last];
+            let mut this_int = centary_decimal_encode(two);
+            this_int <<= 1;
+            if i != size - 1 {
+                this_int |= 1 // add continuation bit.
+            }
+            bcd.push(this_int)
+        }
+        bcd
+    } else {
+        vec![0xfe] // a "false zero" so we don't
+    }
+}
+
+fn centary_decimal_encode(s: &str) -> u8 {
+    if s.len() == 1 {
+        let i = s.parse::<u8>().unwrap();
+        i * 11
+    } else {
+        let i = s.parse::<u8>().unwrap();
+        let o = i / 10 + 1;
+        i + o
+    }
+}
+
+fn centary_decimal_decode(i: u8) -> String {
+    if i % 11 == 0 {
+        let num = i / 11;
+        format!("{num:}")
+    } else {
+        let d = i / 11;
+        let num = i - d - 1;
+        format!("{num:02}")
+    }
+}
+
+fn decode_fraction(fraction_vec: &[u8], is_pos: bool) -> String {
+    if fraction_vec == [0xfe] {
+        "".to_string()
+    } else {
+        let mut s = String::new();
+        for byte in fraction_vec.iter() {
+            let num = byte >> 1;
+            let res = centary_decimal_decode(num);
+            s.push_str(&res);
+            if res.len() == 1 || byte & 1 == 0 {
+                break;
+            }
+        }
+        s
+    }
+}
+
+fn bignum_to_storage(bignum: String, a: Aspect) -> Result<Vec<u8>, LexDataError> {
+    let storage_type = aspect_storage(a);
+    if storage_type == StorageType::BigNum {
+        let mut parts = bignum.split('.');
+        let bigint = parts.next().unwrap_or(&bignum);
+        let fraction = parts.next();
+        let integer_part = bigint.parse::<Integer>().unwrap();
+        let mut prefix = bigint_to_storage(integer_part, a)?;
+        let suffix = encode_fraction(fraction);
+        prefix.extend(suffix);
+        eprintln!("writing storage: {prefix:?}");
+        Ok(prefix)
+    } else {
+        Err(LexDataError::UnexpectedAspect(format!(
+            "The aspect {a:?} did not match Bignum value type"
+        )))
+    }
+}
+
+fn storage_to_bignum(bytes: &[u8]) -> Result<Value, LexDataError> {
+    eprintln!("reading storage: {bytes:?}");
+    let end = bytes.len();
+    let int = storage_to_bigint(&bytes[1..end])?;
+    eprintln!("int: {int:?}");
+    let (is_pos, size, idx) = size_decode(&bytes[1..end]);
+    eprintln!("size: {size:}");
+    let start = size as usize + idx + 1;
+    let fraction_bytes = &bytes[start..end];
+    let fraction = decode_fraction(fraction_bytes, is_pos);
+    let int = match int {
+        Value::BigInt(int) => int,
+        _ => panic!("bigint storage must return bigint"),
+    };
+    let decimal = if fraction.is_empty() {
+        format!("{int:}")
+    } else {
+        format!("{int:}.{fraction:}")
+    };
+    Ok(Value::String(decimal))
 }
 
 const F32_SIGN_MASK: u32 = 0x8000_0000;
@@ -502,8 +606,8 @@ pub fn storage_to_value(bytes: Bytes) -> Result<(Value, Aspect), LexDataError> {
             StorageType::Float32 => storage_to_float32(&bytes.slice(1..)).map(|r| (r, aspect)),
             StorageType::Float64 => storage_to_float64(&bytes.slice(1..)).map(|r| (r, aspect)),
             StorageType::BigInt => storage_to_bigint(&bytes.slice(1..)).map(|r| (r, aspect)),
-            StorageType::BigNum => todo!(),
-            StorageType::Date => todo!(),
+            StorageType::BigNum => storage_to_bignum(&bytes.slice(1..)).map(|r| (r, aspect)),
+            StorageType::DateTime => todo!(),
         }
     }
 }
@@ -831,5 +935,131 @@ mod tests {
     fn float64_round_trip() {
         let res = round_trip(Value::Float64(-10.87_f64), Aspect::Double);
         assert_eq!((Value::Float64(-10.87_f64), Aspect::Double), res);
+    }
+
+    #[test]
+    fn fraction_round_trip() {
+        let s = "12325";
+        let f = encode_fraction(Some(s));
+        let original = decode_fraction(&f);
+        assert_eq!(s, original);
+    }
+
+    #[test]
+    fn fraction_round_trip_empty() {
+        let s = "";
+        let f = encode_fraction(Some(s));
+        let original = decode_fraction(&f);
+        assert_eq!(s, original);
+    }
+
+    #[test]
+    fn fraction_trailing_zero() {
+        let s = "10";
+        let f = encode_fraction(Some(s));
+        let original = decode_fraction(&f);
+        assert_eq!(s, original);
+    }
+
+    #[test]
+    fn fraction_mid_one() {
+        let s = "101";
+        let f = encode_fraction(Some(s));
+        let original = decode_fraction(&f);
+        assert_eq!(s, original);
+    }
+
+    #[test]
+    fn fraction_leading_zeros() {
+        let s = "001";
+        let f = encode_fraction(Some(s));
+        let original = decode_fraction(&f);
+        assert_eq!(s, original);
+    }
+
+    #[test]
+    fn centary_encoding() {
+        let s = "0";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+
+        let s = "00";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+
+        let s = "01";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+
+        let s = "11";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+
+        let s = "22";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+
+        let s = "9";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+
+        let s = "99";
+        let r = centary_decimal_encode(s);
+        let d = centary_decimal_decode(r);
+        assert_eq!(s, d);
+    }
+
+    #[test]
+    fn order_fractions() {
+        let fractions = vec!["1234", "123", "100", "10000", "32"];
+        let mut encodes: Vec<_> = fractions.iter().map(|x| encode_fraction(Some(x))).collect();
+        encodes.sort();
+        let results: Vec<_> = encodes.iter().map(|x| decode_fraction(x)).collect();
+        assert_eq!(vec!["100", "10000", "123", "1234", "32"], results);
+    }
+
+    #[test]
+    fn bignum_round_trip() {
+        let fractions = vec!["1234.2343", "987.23", "0.100", "10000.33", "0.333"];
+        let mut encodes: Vec<_> = fractions
+            .iter()
+            .map(|x| bignum_to_storage(x.to_string(), Aspect::Decimal).unwrap())
+            .collect();
+        encodes.sort();
+        let results: Vec<_> = encodes
+            .iter()
+            .map(|x| {
+                let res = storage_to_bignum(x).unwrap();
+                match res {
+                    Value::String(s) => s,
+                    _ => panic!("Can't be here"),
+                }
+            })
+            .collect();
+        assert_eq!(
+            vec!["0.100", "0.333", "987.23", "1234.2343", "10000.33"],
+            results
+        );
+    }
+
+    #[test]
+    fn date_time_round_trip() {
+        let res = round_trip(
+            Value::String("2007-03-01T13:00:00Z".to_string()),
+            Aspect::DateTime,
+        );
+        assert_eq!(
+            (
+                Value::String("2007-03-01T13:00:00Z".to_string()),
+                Aspect::DateTime
+            ),
+            res
+        );
     }
 }
