@@ -289,10 +289,11 @@ const FIRST_CONTINUATION: u8 = 0b0100_0000u8;
 const BASE_MASK: u8 = !CONTINUATION;
 const FIRST_MASK: u8 = !(FIRST_SIGN | FIRST_CONTINUATION);
 const FIRST_MAX: u8 = FIRST_CONTINUATION;
+const NEGATIVE_ZERO: u8 = 0b0111_1111;
 // Leave in reverse order for the convenience of the caller
 fn size_encode(size: u32) -> Vec<u8> {
     if size == 0 {
-        return vec![0];
+        return vec![NEGATIVE_ZERO]; // just the positive sign bit (allows negative zero)
     }
     let mut remainder = size;
     let mut v = vec![];
@@ -331,7 +332,7 @@ fn size_decode(v: &[u8]) -> (bool, u32, usize) {
     for (i, elt) in v.iter().enumerate() {
         let vi = *elt as u8;
         if i == 0 {
-            sign = !(vi != 0 && vi & FIRST_SIGN == 0);
+            sign = vi & FIRST_SIGN != 0;
             let vi = if sign { vi } else { !vi };
             let val = (vi & FIRST_MASK) as u32;
             if vi & FIRST_CONTINUATION == 0 {
@@ -354,7 +355,6 @@ fn size_decode(v: &[u8]) -> (bool, u32, usize) {
 }
 
 fn bigint_to_storage(bigint: Integer, a: Aspect) -> Result<Vec<u8>, LexDataError> {
-    let storage_type = aspect_storage(a);
     let is_neg = bigint < 0;
     let mut int = bigint.abs();
     let size = int.significant_bits() + 1;
@@ -379,7 +379,10 @@ fn bigint_to_storage(bigint: Integer, a: Aspect) -> Result<Vec<u8>, LexDataError
 }
 
 fn storage_to_bigint(bytes: &[u8]) -> Result<Value, LexDataError> {
+    eprintln!("Before size decode");
     let (is_pos, size, idx) = size_decode(bytes);
+    eprintln!("After size decode");
+    eprintln!("size: {size}");
     let mut int = Integer::new();
     if size == 0 {
         return Ok(Value::BigInt(int));
@@ -420,33 +423,34 @@ fn encode_fraction(fraction: Option<&str>) -> Vec<u8> {
         }
         bcd
     } else {
-        vec![0xfe] // a "false zero" so we don't
+        vec![0xfe] // a "false zero" so we don't represent no fraction as a fraction
     }
 }
 
 fn centary_decimal_encode(s: &str) -> u8 {
     if s.len() == 1 {
         let i = s.parse::<u8>().unwrap();
-        i * 11
+        i * 11 + 1
     } else {
         let i = s.parse::<u8>().unwrap();
         let o = i / 10 + 1;
-        i + o
+        i + o + 1
     }
 }
 
 fn centary_decimal_decode(i: u8) -> String {
-    if i % 11 == 0 {
-        let num = i / 11;
+    let j = i - 1;
+    if j % 11 == 0 {
+        let num = j / 11;
         format!("{num:}")
     } else {
-        let d = i / 11;
-        let num = i - d - 1;
+        let d = j / 11;
+        let num = j - d - 1;
         format!("{num:02}")
     }
 }
 
-fn decode_fraction(fraction_vec: &[u8], is_pos: bool) -> String {
+fn decode_fraction(fraction_vec: &[u8]) -> String {
     if fraction_vec == [0xfe] {
         "".to_string()
     } else {
@@ -470,10 +474,24 @@ fn bignum_to_storage(bignum: String, a: Aspect) -> Result<Vec<u8>, LexDataError>
         let bigint = parts.next().unwrap_or(&bignum);
         let fraction = parts.next();
         let integer_part = bigint.parse::<Integer>().unwrap();
-        let mut prefix = bigint_to_storage(integer_part, a)?;
-        let suffix = encode_fraction(fraction);
+        let is_neg = bignum.starts_with('-');
+        let prefix = bigint_to_storage(integer_part.clone(), a)?;
+        let mut prefix = if integer_part == 0 && is_neg {
+            let aspect_u8 = aspect_byte(a);
+            vec![aspect_u8, NEGATIVE_ZERO] // negative zero
+        } else {
+            prefix
+        };
+        let suffix = if is_neg {
+            let mut suffix = encode_fraction(fraction);
+            for i in 0..suffix.len() {
+                suffix[i] = !suffix[i]
+            }
+            suffix
+        } else {
+            encode_fraction(fraction)
+        };
         prefix.extend(suffix);
-        eprintln!("writing storage: {prefix:?}");
         Ok(prefix)
     } else {
         Err(LexDataError::UnexpectedAspect(format!(
@@ -483,15 +501,22 @@ fn bignum_to_storage(bignum: String, a: Aspect) -> Result<Vec<u8>, LexDataError>
 }
 
 fn storage_to_bignum(bytes: &[u8]) -> Result<Value, LexDataError> {
-    eprintln!("reading storage: {bytes:?}");
     let end = bytes.len();
     let int = storage_to_bigint(&bytes[1..end])?;
-    eprintln!("int: {int:?}");
     let (is_pos, size, idx) = size_decode(&bytes[1..end]);
+    eprintln!("is_pos: {is_pos:}");
     eprintln!("size: {size:}");
     let start = size as usize + idx + 1;
     let fraction_bytes = &bytes[start..end];
-    let fraction = decode_fraction(fraction_bytes, is_pos);
+    let fraction = if is_pos {
+        decode_fraction(fraction_bytes)
+    } else {
+        let mut fraction_bytes: Vec<u8> = fraction_bytes.to_vec();
+        for i in 0..fraction_bytes.len() {
+            fraction_bytes[i] = !fraction_bytes[i]
+        }
+        decode_fraction(&fraction_bytes)
+    };
     let int = match int {
         Value::BigInt(int) => int,
         _ => panic!("bigint storage must return bigint"),
@@ -499,7 +524,8 @@ fn storage_to_bignum(bytes: &[u8]) -> Result<Value, LexDataError> {
     let decimal = if fraction.is_empty() {
         format!("{int:}")
     } else {
-        format!("{int:}.{fraction:}")
+        let sign = if int == 0 && !is_pos { "-" } else { "" };
+        format!("{sign:}{int:}.{fraction:}")
     };
     Ok(Value::String(decimal))
 }
@@ -805,13 +831,11 @@ mod tests {
         let mut byte_vec = Vec::with_capacity(int.len());
         for f in int.iter() {
             let storage = value_to_storage(Value::Int32(*f), Aspect::Int).unwrap();
-            eprintln!("Test: {storage:?}");
             byte_vec.push(storage)
         }
         byte_vec.sort();
         let mut result_vec = Vec::with_capacity(int.len());
         for b in byte_vec.iter() {
-            eprintln!("Running after sort: {b:?}");
             let bytes = Bytes::from(b.clone());
             let (value, _) = storage_to_value(bytes).unwrap();
             if let Value::Int32(v) = value {
@@ -829,13 +853,11 @@ mod tests {
         let mut byte_vec = Vec::with_capacity(int.len());
         for f in int.iter() {
             let storage = value_to_storage(Value::Int64(*f), Aspect::Long).unwrap();
-            eprintln!("Test: {storage:?}");
             byte_vec.push(storage)
         }
         byte_vec.sort();
         let mut result_vec = Vec::with_capacity(int.len());
         for b in byte_vec.iter() {
-            eprintln!("Running after sort: {b:?}");
             let bytes = Bytes::from(b.clone());
             let (value, _) = storage_to_value(bytes).unwrap();
             if let Value::Int64(v) = value {
@@ -864,7 +886,13 @@ mod tests {
         assert_eq!(bytes, vec![140]);
 
         let bytes = size_encode(0);
-        assert_eq!(bytes, vec![0]);
+        assert_eq!(bytes, vec![191]);
+
+        let bytes = size_encode(0);
+        let (is_pos, size, idx) = size_decode(&bytes);
+        assert!(is_pos);
+        assert_eq!(size, 0);
+        assert_eq!(idx, 1);
     }
 
     #[test]
@@ -897,13 +925,11 @@ mod tests {
         let mut byte_vec = Vec::with_capacity(int.len());
         for i in int.iter() {
             let storage = value_to_storage(Value::BigInt(i.clone()), Aspect::Integer).unwrap();
-            eprintln!("Test: {storage:?}");
             byte_vec.push(storage)
         }
         byte_vec.sort();
         let mut result_vec = Vec::with_capacity(int.len());
         for b in byte_vec.iter() {
-            eprintln!("Running after sort: {b:?}");
             let bytes = Bytes::from(b.clone());
             let (value, _) = storage_to_value(bytes).unwrap();
             if let Value::BigInt(v) = value {
@@ -1025,8 +1051,27 @@ mod tests {
     }
 
     #[test]
+    fn negative_zero() {
+        let negative_zero = vec![NEGATIVE_ZERO];
+        let (is_pos, size, idx) = size_decode(&negative_zero);
+        assert!(!is_pos);
+        assert_eq!(size, 0);
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
     fn bignum_round_trip() {
-        let fractions = vec!["1234.2343", "987.23", "0.100", "10000.33", "0.333"];
+        let fractions = vec![
+            "1234.2343",
+            "987.23",
+            "-0.001",
+            "-10.3",
+            "0.0",
+            "0.100",
+            "10000.33",
+            "0.333",
+            "-9871234.1928374",
+        ];
         let mut encodes: Vec<_> = fractions
             .iter()
             .map(|x| bignum_to_storage(x.to_string(), Aspect::Decimal).unwrap())
@@ -1043,7 +1088,17 @@ mod tests {
             })
             .collect();
         assert_eq!(
-            vec!["0.100", "0.333", "987.23", "1234.2343", "10000.33"],
+            vec![
+                "-9871234.1928374",
+                "-10.3",
+                "-0.001",
+                "0.0",
+                "0.100",
+                "0.333",
+                "987.23",
+                "1234.2343",
+                "10000.33"
+            ],
             results
         );
     }
