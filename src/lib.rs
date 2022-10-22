@@ -338,10 +338,12 @@ fn size_encode(size: u32) -> Vec<u8> {
 }
 
 fn size_decode(v: &[u8]) -> (bool, u32, usize) {
+    eprintln!("v: {v:?}");
     let mut size: u32 = 0;
     let mut sign = true;
     for (i, elt) in v.iter().enumerate() {
         let vi = *elt as u8;
+        eprintln!("byte: {vi:}");
         if i == 0 {
             sign = vi & FIRST_SIGN != 0;
             let vi = if sign { vi } else { !vi };
@@ -513,11 +515,11 @@ fn bignum_to_storage(bignum: String, a: Aspect) -> Result<Vec<u8>, LexDataError>
 
 fn storage_to_bignum(bytes: &[u8]) -> Result<Value, LexDataError> {
     let end = bytes.len();
-    let int = storage_to_bigint(&bytes[1..end])?;
-    let (is_pos, size, idx) = size_decode(&bytes[1..end]);
+    let int = storage_to_bigint(&bytes[0..end])?;
+    let (is_pos, size, idx) = size_decode(&bytes[0..end]);
     eprintln!("is_pos: {is_pos:}");
     eprintln!("size: {size:}");
-    let start = size as usize + idx + 1;
+    let start = size as usize + idx;
     let fraction_bytes = &bytes[start..end];
     let fraction = if is_pos {
         decode_fraction(fraction_bytes)
@@ -1118,6 +1120,7 @@ mod tests {
             "987.23",
             "-0.001",
             "-10.3",
+            "-3233.23423",
             "0.0",
             "0.100",
             "10000.33",
@@ -1132,7 +1135,7 @@ mod tests {
         let results: Vec<_> = encodes
             .iter()
             .map(|x| {
-                let res = storage_to_bignum(x).unwrap();
+                let res = storage_to_bignum(&x[1..x.len()]).unwrap();
                 match res {
                     Value::String(s) => s,
                     _ => panic!("Can't be here"),
@@ -1142,6 +1145,7 @@ mod tests {
         assert_eq!(
             vec![
                 "-9871234.1928374",
+                "-3233.23423",
                 "-10.3",
                 "-0.001",
                 "0.0",
@@ -1203,5 +1207,38 @@ mod tests {
             ],
             dates_sorted
         );
+    }
+
+    #[test]
+    fn self_termination_tests() {
+        // we need to know we are not relying on the length of an array anwyere.
+        let mut num = value_to_storage(
+            Value::BigInt("-3233".parse::<Integer>().unwrap()),
+            Aspect::Integer,
+        )
+        .unwrap();
+        let garbage = vec![23, 35, 128];
+        num.extend(garbage);
+        let (res, _) = storage_to_value(Bytes::from(num)).unwrap();
+        match res {
+            Value::BigInt(i) => {
+                let rendered = format!("{i:?}");
+                assert_eq!(rendered, "-3233");
+            }
+            _ => panic!("This is not good"),
+        }
+
+        let mut num =
+            value_to_storage(Value::String("-3233.23423".to_string()), Aspect::Decimal).unwrap();
+        let garbage = vec![183, 35, 128];
+        num.extend(garbage);
+        eprintln!("num + garbage {num:?}");
+        let (res, _) = storage_to_value(Bytes::from(num)).unwrap();
+        match res {
+            Value::String(n) => {
+                assert_eq!("-3233.23423".to_string(), n);
+            }
+            _ => panic!("This is not good"),
+        }
     }
 }
