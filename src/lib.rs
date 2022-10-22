@@ -13,7 +13,7 @@ use rug::Integer;
 //use std::cmp::Ordering;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDateTime};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::io::Cursor;
@@ -211,12 +211,23 @@ fn string_to_storage(v: String, a: Aspect) -> Result<Vec<u8>, LexDataError> {
 }
 
 fn date_time_to_storage(s: String, a: Aspect) -> Result<Vec<u8>, LexDataError> {
-    match DateTime::parse_from_rfc2822(&s) {
+    match DateTime::parse_from_rfc3339(&s) {
         Ok(date_time) => {
-            let aspect_u8 = aspect_byte(a);
-            todo!()
+            let timestamp = date_time.timestamp();
+            int64_to_storage(timestamp, a)
         }
         Err(parse_error) => Err(LexDataError::BadDateFormat(parse_error.to_string())),
+    }
+}
+
+fn storage_to_date_time(bytes: &[u8]) -> Result<Value, LexDataError> {
+    match storage_to_int64(bytes) {
+        Ok(Value::Int64(i)) => {
+            let dt = NaiveDateTime::from_timestamp(i, 0);
+            Ok(Value::String(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()))
+        }
+        Ok(_) => panic!("Imposible return value from storage_to_int64"),
+        Err(err) => Err(err),
     }
 }
 
@@ -253,7 +264,7 @@ fn storage_to_int32(bytes: &[u8]) -> Result<Value, LexDataError> {
 
 fn int64_to_storage(i: i64, a: Aspect) -> Result<Vec<u8>, LexDataError> {
     let storage_type = aspect_storage(a);
-    if storage_type == StorageType::Int64 {
+    if storage_type == StorageType::Int64 || storage_type == StorageType::DateTime {
         let aspect_u8 = aspect_byte(a);
         let mut wtr = Vec::with_capacity(5);
         wtr.push(aspect_u8);
@@ -625,6 +636,7 @@ pub fn storage_to_value(bytes: Bytes) -> Result<(Value, Aspect), LexDataError> {
         Ok((Value::Boolean(false), Aspect::Boolean))
     } else {
         let ty = aspect_storage(aspect);
+        eprintln!("ty: {ty:?}");
         match ty {
             StorageType::String => Ok((string_from_bytes(bytes.slice(1..)), aspect)),
             StorageType::Int32 => storage_to_int32(&bytes.slice(1..)).map(|r| (r, aspect)),
@@ -633,8 +645,48 @@ pub fn storage_to_value(bytes: Bytes) -> Result<(Value, Aspect), LexDataError> {
             StorageType::Float64 => storage_to_float64(&bytes.slice(1..)).map(|r| (r, aspect)),
             StorageType::BigInt => storage_to_bigint(&bytes.slice(1..)).map(|r| (r, aspect)),
             StorageType::BigNum => storage_to_bignum(&bytes.slice(1..)).map(|r| (r, aspect)),
-            StorageType::DateTime => todo!(),
+            StorageType::DateTime => storage_to_date_time(&bytes.slice(1..)).map(|r| (r, aspect)),
         }
+    }
+}
+
+pub fn string_length(bytes: &[u8]) -> usize {
+    let mut count = 0_usize;
+    for b in bytes.iter() {
+        if *b == 0 {
+            break;
+        }
+        count += 1;
+    }
+    count
+}
+
+pub fn storage_size(bytes: Bytes) -> usize {
+    let a = byte_aspect(&bytes[0]);
+    let storage_type = aspect_storage(a);
+    match storage_type {
+        StorageType::String => 1 + string_length(&bytes[1..bytes.len()]),
+        StorageType::Int32 => 5,
+        StorageType::Int64 => 9,
+        StorageType::Float32 => 5,
+        StorageType::Float64 => 9,
+        StorageType::BigInt => {
+            let (_, size, idx) = size_decode(&bytes[1..bytes.len()]);
+            size as usize + idx + 1
+        }
+        StorageType::BigNum => {
+            let (_, size, idx) = size_decode(&bytes[1..bytes.len()]);
+            let offset = size as usize + idx + 1;
+            let mut count = 0_usize;
+            for i in offset..bytes.len() {
+                count += 1;
+                if bytes[i] & 1 != 1 {
+                    break;
+                }
+            }
+            count + offset
+        }
+        StorageType::DateTime => 9,
     }
 }
 
@@ -1115,6 +1167,41 @@ mod tests {
                 Aspect::DateTime
             ),
             res
+        );
+    }
+
+    #[test]
+    fn date_time_ordering() {
+        let dates = vec![
+            "2525-03-01T12:00:00Z",
+            "2007-03-01T13:00:00Z",
+            "1977-05-07T11:30:20Z",
+        ];
+        let mut date_bytes: Vec<_> = dates
+            .iter()
+            .map(|x| value_to_storage(Value::String(x.to_string()), Aspect::DateTime).unwrap())
+            .collect();
+        date_bytes.sort();
+        let dates_sorted: Vec<_> = date_bytes
+            .iter()
+            .map(|x| {
+                let res = &*x;
+                let bytes: Bytes = Bytes::from(res.clone());
+                let (res, _aspect) = storage_to_value(bytes).unwrap();
+                match res {
+                    Value::String(date) => date,
+                    _ => panic!("Didn't work"),
+                }
+            })
+            .collect();
+        eprintln!("dates_sorted: {dates_sorted:?}");
+        assert_eq!(
+            vec![
+                "1977-05-07T11:30:20Z",
+                "2007-03-01T13:00:00Z",
+                "2525-03-01T12:00:00Z"
+            ],
+            dates_sorted
         );
     }
 }
