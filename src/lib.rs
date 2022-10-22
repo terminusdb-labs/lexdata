@@ -338,12 +338,10 @@ fn size_encode(size: u32) -> Vec<u8> {
 }
 
 fn size_decode(v: &[u8]) -> (bool, u32, usize) {
-    eprintln!("v: {v:?}");
     let mut size: u32 = 0;
     let mut sign = true;
     for (i, elt) in v.iter().enumerate() {
         let vi = *elt as u8;
-        eprintln!("byte: {vi:}");
         if i == 0 {
             sign = vi & FIRST_SIGN != 0;
             let vi = if sign { vi } else { !vi };
@@ -392,10 +390,7 @@ fn bigint_to_storage(bigint: Integer, a: Aspect) -> Result<Vec<u8>, LexDataError
 }
 
 fn storage_to_bigint(bytes: &[u8]) -> Result<Value, LexDataError> {
-    eprintln!("Before size decode");
     let (is_pos, size, idx) = size_decode(bytes);
-    eprintln!("After size decode");
-    eprintln!("size: {size}");
     let mut int = Integer::new();
     if size == 0 {
         return Ok(Value::BigInt(int));
@@ -517,8 +512,6 @@ fn storage_to_bignum(bytes: &[u8]) -> Result<Value, LexDataError> {
     let end = bytes.len();
     let int = storage_to_bigint(&bytes[0..end])?;
     let (is_pos, size, idx) = size_decode(&bytes[0..end]);
-    eprintln!("is_pos: {is_pos:}");
-    eprintln!("size: {size:}");
     let start = size as usize + idx;
     let fraction_bytes = &bytes[start..end];
     let fraction = if is_pos {
@@ -566,7 +559,6 @@ fn float32_to_storage(f: f32, a: Aspect) -> Result<Vec<u8>, LexDataError> {
 }
 
 fn storage_to_float32(bytes: &[u8]) -> Result<Value, LexDataError> {
-    eprintln!("store bytes (out): {:?}", bytes);
     let mut rdr = Cursor::new(bytes);
     let f_result = rdr.read_f32::<BigEndian>();
     if let Ok(f) = f_result {
@@ -630,7 +622,6 @@ pub fn string_from_bytes(bytes: Bytes) -> Value {
 
 pub fn storage_to_value(bytes: Bytes) -> Result<(Value, Aspect), LexDataError> {
     let aspect_byte = bytes[0];
-    eprintln!("Aspect byte: {aspect_byte:?}");
     let aspect: Aspect = byte_aspect(&aspect_byte);
     if aspect == Aspect::True {
         Ok((Value::Boolean(true), Aspect::Boolean))
@@ -638,7 +629,6 @@ pub fn storage_to_value(bytes: Bytes) -> Result<(Value, Aspect), LexDataError> {
         Ok((Value::Boolean(false), Aspect::Boolean))
     } else {
         let ty = aspect_storage(aspect);
-        eprintln!("ty: {ty:?}");
         match ty {
             StorageType::String => Ok((string_from_bytes(bytes.slice(1..)), aspect)),
             StorageType::Int32 => storage_to_int32(&bytes.slice(1..)).map(|r| (r, aspect)),
@@ -1198,7 +1188,6 @@ mod tests {
                 }
             })
             .collect();
-        eprintln!("dates_sorted: {dates_sorted:?}");
         assert_eq!(
             vec![
                 "1977-05-07T11:30:20Z",
@@ -1211,7 +1200,7 @@ mod tests {
 
     #[test]
     fn self_termination_tests() {
-        // we need to know we are not relying on the length of an array anwyere.
+        // we need to know we are not relying on the length of an array anywhere.
         let mut num = value_to_storage(
             Value::BigInt("-3233".parse::<Integer>().unwrap()),
             Aspect::Integer,
@@ -1232,7 +1221,6 @@ mod tests {
             value_to_storage(Value::String("-3233.23423".to_string()), Aspect::Decimal).unwrap();
         let garbage = vec![183, 35, 128];
         num.extend(garbage);
-        eprintln!("num + garbage {num:?}");
         let (res, _) = storage_to_value(Bytes::from(num)).unwrap();
         match res {
             Value::String(n) => {
