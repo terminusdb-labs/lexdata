@@ -13,7 +13,7 @@ implemented, namely:
 - [x] f32
 - [x] f64
 - [ ] Dates
-- [ ] Date Time
+- [X] Date Time
 - [ ] Large Rationals
 
 Lexical representations are useful because they enable prefix-based
@@ -170,7 +170,22 @@ lexical sorting. We inherit the sign bit from the large integer encoding.
 
 ## Float32 / Float64
 
+Float32 and Float64 can be marshalled to a fixed-width lexically
+sortable representation simply by checking the sign bit and
+complementing, or setting the sign bit to 0 if it is 1. The sign bit
+in IEEE is 1 for negative, so the complement will automatically be
+lower than every positive number and sorted in reverse order (which is
+the correct order for negatives).  By contrast, setting the sign bit
+to 1 for positives, will make them larger than every negative number
+lexically.
+
+This trick works for all IEEE floats, including NaN, and positive and negative INF.
+
 ## Int32 / Int64
+
+Int32 and Int64 work similarly to Float32 and Float64 excepting that
+we already have a complemented representation for negatives, and only
+need to flip the sign bit for both positives and negatives.
 
 ## String
 
@@ -178,3 +193,4 @@ Strings are marshalled as their byte representation.
 
 ## DateTime
 
+DateTimes are stored in an Int64 field with their seconds since Jan 1, 1970.
