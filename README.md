@@ -119,9 +119,10 @@ pos|  size 5 ______________limbs______________________
   ||   /|\  /                                         \
  |10000101|10001100|11000001|00001100|10000101|00101100|
 ```
-## Large Decimals
 
-Large decimals are a composite of two representations. The first is
+## Large Floats (Decimals)
+
+Large floats are a composite of two representations. The first is
 Large Integer representation as above, and the second is a lexically
 sortable fractional part.
 
@@ -134,6 +135,8 @@ parsimonious with bits, we actually represent pairs of decimal digits.
 |---------|----------|
 |   0     |    1     |
 |   00    |    2     |
+|   01    |    3     |
+|   02    |    4     |
 |   ...   |   ...    |
 |   1     |    12    |
 |   10    |    13    |
@@ -179,7 +182,8 @@ the correct order for negatives).  By contrast, setting the sign bit
 to 1 for positives, will make them larger than every negative number
 lexically.
 
-This trick works for all IEEE floats, including NaN, and positive and negative INF.
+This trick works for all IEEE floats, including NaN, and positive and
+negative INF.
 
 ## Int32 / Int64
 
