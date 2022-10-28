@@ -410,7 +410,7 @@ fn storage_to_bigint(bytes: &[u8]) -> Result<Value, LexDataError> {
 fn encode_fraction(fraction: Option<&str>) -> Vec<u8> {
     if let Some(f) = fraction {
         if f.is_empty() {
-            return vec![0xfe]; // a "false zero" so we don't represent it at all.
+            return vec![0x00]; // a "false zero" so we don't represent it at all.
         }
         let len = f.len();
         let size = len / 2 + usize::from(len % 2 != 0);
@@ -431,7 +431,7 @@ fn encode_fraction(fraction: Option<&str>) -> Vec<u8> {
         }
         bcd
     } else {
-        vec![0xfe] // a "false zero" so we don't represent no fraction as a fraction
+        vec![0x00] // a "false zero" so we don't represent no fraction as a fraction
     }
 }
 
@@ -459,7 +459,7 @@ fn centary_decimal_decode(i: u8) -> String {
 }
 
 fn decode_fraction(fraction_vec: &[u8]) -> String {
-    if fraction_vec == [0xfe] {
+    if fraction_vec == [0x00] {
         "".to_string()
     } else {
         let mut s = String::new();
@@ -1111,6 +1111,8 @@ mod tests {
             "-0.001",
             "-10.3",
             "-3233.23423",
+            "-0.0",
+            "0",
             "0.0",
             "0.100",
             "10000.33",
@@ -1138,6 +1140,8 @@ mod tests {
                 "-3233.23423",
                 "-10.3",
                 "-0.001",
+                "-0.0",
+                "0",
                 "0.0",
                 "0.100",
                 "0.333",
